@@ -1,0 +1,89 @@
+Practical Machine Learning Course Project
+=========================================
+##Executive Summary
+In this project, I first perform some exploratory analysis to the dataset and clean some of them with unimportant information or with too many NA. Then I apply 2 machine learning algorithm on training set and calculate accuracy through cross validation. The result shows that random forest produces the highest accuracy, so I apply it on test set to classify them.
+
+##Downloading Data
+```{r}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "training.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "testing.csv")
+```
+
+##Getting and Cleaning Data
+```{r}
+Training <- read.csv("training.csv", header = TRUE)
+Testing <- read.csv("testing.csv", header = TRUE)
+dim(Training)
+dim(Testing)
+```
+The first 2 columns represents the name of people, columns 3-5 represents timestamp, columns 6-7 have nothing to do with the way performing barbell lifts, so I remove them from the dataset.
+```{r}
+TrainingClean <- Training[, -c(1:7)]
+TestingClean <- Testing[, -c(1:7)]
+```
+There are many NA in the dataset, so I remove the columns with the majority being NA.
+```{r}
+library(caret)
+TrainingClean <- TrainingClean[, colSums(is.na(TrainingClean)) == 0]
+TestingClean <- TestingClean[, colSums(is.na(TestingClean)) == 0]
+removeNA <- nearZeroVar(TrainingClean)
+TrainingClean <- TrainingClean[, -removeNA]
+dim(TrainingClean)
+str(TrainingClean)
+dim(TestingClean)
+str(TestingClean)
+```
+After data cleaning, there are 53 variables in training set and testing set.
+
+##Preprocessing Data for Modeling
+```{r}
+set.seed(2333)
+inTrain <- createDataPartition(TrainingClean$classe, p = 0.70, list = FALSE)
+trainData <- TrainingClean[inTrain, ]
+testData <- TrainingClean[-inTrain, ]
+```
+
+##Exploratory Data Analysis
+To find out variables in the training dataset with high correlation, I draw a correlation map among them.
+```{r}
+library(corrplot)
+CorrMap <- cor(trainData[, -length(names(trainData))])
+corrplot(CorrMap, method = "color")
+```
+
+Variables with high correlation are plotted in dark red, I further find out these variables.
+```{r}
+highCorr <- findCorrelation(CorrMap, cutoff = 0.70)
+names(trainData)[highCorr]
+```
+There are 22 variables highly correlated with each other.
+
+##Model Selection
+#classification tree
+```{r}
+library(rpart)
+library(rpart.plot)
+trControl <- trainControl(method = "cv", 5)
+ModTree <- train(classe ~., data = trainData, method = "rpart", trControl = trControl)
+treeModel <- rpart(classe ~., data = trainData, method = "class")
+prp(treeModel)
+```
+```{r}
+TreePred <- predict(ModTree, testData)
+confusionMatrix(testData$classe, TreePred)
+```
+Classification Tree gets accuracy of only 0.4952, it is a poor model, so I should try another model.
+
+#Random Forest
+```{r}
+trControl <- trainControl(method = "cv", 5)
+ModRf <- train(classe ~., data = trainData, method = "rf", trControl = trControl, verbose = FALSE)
+ModRf
+```
+The highest accuracy is 0.9903173 when mtry is equal to 27, it is a much better model.
+
+##Predicting Data
+```{r}
+result <- predict(ModRf, TestingClean[, -length(names(TestingClean))])
+result
+```
